@@ -1,3 +1,17 @@
+FROM golang:1.13.15 as build
+
+WORKDIR /hpe/csi/driver
+COPY ./ .
+
+ENV GO111MODULES "on" \
+    GOOS "linux"
+
+RUN make compile
+
+RUN TUNE_LINUX_CONFIG_PATH=$(go list -f {{.Dir}} github.com/hpe-storage/common-host-libs/tunelinux/config) && \
+    mkdir build/tune && \
+    cp -R ${TUNE_LINUX_CONFIG_PATH}/* build/tune/
+
 FROM registry.access.redhat.com/ubi7/ubi-minimal:7.9-256
 
 RUN microdnf update -y && rm -rf /var/cache/yum
@@ -17,7 +31,7 @@ WORKDIR /root
 COPY /LICENSE /licenses/
 
 RUN mkdir /chroot
-ADD chroot-host-wrapper.sh /chroot
+COPY cmd/csi-driver/chroot-host-wrapper.sh /chroot
 RUN chmod 777 /chroot/chroot-host-wrapper.sh
 RUN ln -s /chroot/chroot-host-wrapper.sh /chroot/blkid \
     && ln -s /chroot/chroot-host-wrapper.sh /chroot/blockdev \
@@ -43,23 +57,23 @@ RUN ln -s /chroot/chroot-host-wrapper.sh /chroot/blkid \
 ENV PATH="/chroot:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # add host conformance checks and configuration
-ADD [ "conform/*", "/opt/hpe-storage/lib/" ]
+COPY cmd/csi-driver/conform/* /opt/hpe-storage/lib/
 
 # diag log script
-ADD [ "diag/*",  "/opt/hpe-storage/bin/" ]
+COPY cmd/csi-driver/diag/*  /opt/hpe-storage/bin/
 
 # add config files to tune multipath settings
-ADD [ "tune/*", "/opt/hpe-storage/nimbletune/"]
+COPY --from=build /hpe/csi/driver/build/tune/* /opt/hpe-storage/nimbletune/
 
 # add rescan script for resize operation
-ADD ["rescan-scsi-bus.sh", "/usr/bin/rescan-scsi-bus.sh"]
+COPY cmd/csi-driver/rescan-scsi-bus.sh /usr/bin/rescan-scsi-bus.sh
 RUN ["chmod", "+x", "/usr/bin/rescan-scsi-bus.sh"]
 
 # add plugin binary
-ADD [ "csi-driver", "/bin/" ]
+COPY --from=build /hpe/csi/driver/build/csi-driver /bin/
 
 # entrypoint
-ADD [ "conform/entrypoint.sh", "/entrypoint.sh" ]
+COPY cmd/csi-driver/conform/entrypoint.sh /entrypoint.sh
 RUN [ "chmod", "+x", "/entrypoint.sh" ]
 
 ENTRYPOINT [ "/entrypoint.sh" ]

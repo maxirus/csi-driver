@@ -67,3 +67,6 @@ replace k8s.io/apimachinery => k8s.io/apimachinery v0.17.1-beta.0
 replace k8s.io/client-go => k8s.io/client-go v0.17.0
 
 replace google.golang.org/grpc => google.golang.org/grpc v1.26.0
+
+// TODO: Testing my changes
+replace github.com/hpe-storage/common-host-libs => github.com/maxirus/common-host-libs v0.0.0-20210213183544-77a2ccad586e
